@@ -9,7 +9,7 @@ from io import BytesIO
 import os
 
 app = Flask(__name__)
-BACKEND_URL = os.getenv('BACKEND_API_URL', 'http://backend:8000')
+BACKEND_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8000')
 
 @app.route('/')
 def index():
