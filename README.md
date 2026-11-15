@@ -214,6 +214,14 @@ http http://localhost:8000/facturas/v1/TEST-001
 2. Probar diferentes números de factura
 3. Verificar generación correcta de PDFs
 
+### Ejecutar pruebas automatizadas
+
+Desde la raíz del proyecto:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ## API Documentation
 
 La documentación interactiva de Swagger está disponible en:
