@@ -15,109 +15,124 @@ BACKEND_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8000')
 def index():
     return render_template('index.html')
 
+def obtener_factura(id_factura):
+    try:
+        response = requests.get(
+            f'{BACKEND_URL}/facturas/v1/{id_factura}',
+            timeout=10
+        )
+    except requests.exceptions.ConnectionError:
+        abort(503, description="Error de conexión con el servidor")
+    except requests.exceptions.Timeout:
+        abort(504, description="El servidor tardó demasiado en responder")
+
+    if response.status_code != 200:
+        abort(404, description="Factura no encontrada")
+
+    return response.json()
+
+@app.route('/factura', methods=['POST'])
+def consultar_factura():
+    id_factura = request.form.get('id_factura', '').strip()
+    if not id_factura:
+        return render_template(
+            'index.html',
+            error="El número de factura es obligatorio"
+        ), 400
+
+    factura = obtener_factura(id_factura)
+    return render_template('index.html', factura=factura)
+
 @app.route('/generar-pdf', methods=['POST'])
 def generar_pdf():
     id_factura = request.form.get('id_factura', '').strip()
     if not id_factura:
         abort(400, description="El número de factura es obligatorio")
 
-    try:
-        response = requests.get(
-            f'{BACKEND_URL}/facturas/v1/{id_factura}',
-            timeout=10
-        )
-        
-        if response.status_code != 200:
-            abort(404, description="Factura no encontrada")
-            
-        factura = response.json()
-        
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            rightMargin=15 * mm,
-            leftMargin=15 * mm,
-            topMargin=15 * mm,
-            bottomMargin=15 * mm
-        )
-        styles = getSampleStyleSheet()
-        elements = []
+    factura = obtener_factura(id_factura)
 
-        elements.append(Paragraph("FACTURA", styles['Title']))
-        elements.append(Paragraph(
-            f"Número: {factura['numero_factura']}<br/>"
-            f"Fecha de emisión: {factura['fecha_emision']}",
-            styles['Normal']
-        ))
-        elements.append(Spacer(1, 10))
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=15 * mm,
+        leftMargin=15 * mm,
+        topMargin=15 * mm,
+        bottomMargin=15 * mm
+    )
+    styles = getSampleStyleSheet()
+    elements = []
 
-        empresa = factura['empresa']
-        elements.append(Paragraph(
-            f"<b>Empresa</b><br/>{empresa['nombre']}<br/>"
-            f"{empresa['direccion']}<br/>"
-            f"{empresa['telefono']}<br/>{empresa['email']}",
-            styles['Normal']
-        ))
-        elements.append(Spacer(1, 10))
+    elements.append(Paragraph("FACTURA", styles['Title']))
+    elements.append(Paragraph(
+        f"Número: {factura['numero_factura']}<br/>"
+        f"Fecha de emisión: {factura['fecha_emision']}",
+        styles['Normal']
+    ))
+    elements.append(Spacer(1, 10))
 
-        cliente = factura['cliente']
-        elements.append(Paragraph(
-            f"<b>Cliente</b><br/>{cliente['nombre']}<br/>"
-            f"{cliente['direccion']}<br/>{cliente['telefono']}",
-            styles['Normal']
-        ))
-        elements.append(Spacer(1, 15))
+    empresa = factura['empresa']
+    elements.append(Paragraph(
+        f"<b>Empresa</b><br/>{empresa['nombre']}<br/>"
+        f"{empresa['direccion']}<br/>"
+        f"{empresa['telefono']}<br/>{empresa['email']}",
+        styles['Normal']
+    ))
+    elements.append(Spacer(1, 10))
 
-        detalle = [['Cantidad', 'Descripción', 'Precio unitario', 'Total']]
-        for item in factura['detalle']:
-            detalle.append([
-                str(item['cantidad']),
-                item['descripcion'],
-                f"${item['precio_unitario']:.2f}",
-                f"${item['total']:.2f}"
-            ])
+    cliente = factura['cliente']
+    elements.append(Paragraph(
+        f"<b>Cliente</b><br/>{cliente['nombre']}<br/>"
+        f"{cliente['direccion']}<br/>{cliente['telefono']}",
+        styles['Normal']
+    ))
+    elements.append(Spacer(1, 15))
 
-        detalle_table = Table(detalle, colWidths=[25 * mm, 85 * mm, 35 * mm, 35 * mm])
-        detalle_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-            ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('PADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(detalle_table)
-        elements.append(Spacer(1, 15))
+    detalle = [['Cantidad', 'Descripción', 'Precio unitario', 'Total']]
+    for item in factura['detalle']:
+        detalle.append([
+            str(item['cantidad']),
+            item['descripcion'],
+            f"${item['precio_unitario']:.2f}",
+            f"${item['total']:.2f}"
+        ])
 
-        resumen = [
-            ['Subtotal', f"${factura['subtotal']:.2f}"],
-            ['Impuesto (21%)', f"${factura['impuesto']:.2f}"],
-            ['Total', f"${factura['total']:.2f}"],
-        ]
-        resumen_table = Table(resumen, colWidths=[145 * mm, 35 * mm], hAlign='RIGHT')
-        resumen_table.setStyle(TableStyle([
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-            ('LINEABOVE', (0, -1), (-1, -1), 1, colors.black),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('PADDING', (0, 0), (-1, -1), 5),
-        ]))
-        elements.append(resumen_table)
+    detalle_table = Table(detalle, colWidths=[25 * mm, 85 * mm, 35 * mm, 35 * mm])
+    detalle_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('PADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(detalle_table)
+    elements.append(Spacer(1, 15))
 
-        doc.build(elements)
-        buffer.seek(0)
-        
-        return send_file(
-            buffer,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f'factura-{id_factura}.pdf'
-        )
-    except requests.exceptions.ConnectionError:
-        abort(503, description="Error de conexión con el servidor")
-    except requests.exceptions.Timeout:
-        abort(504, description="El servidor tardó demasiado en responder")
+    resumen = [
+        ['Subtotal', f"${factura['subtotal']:.2f}"],
+        ['Impuesto (21%)', f"${factura['impuesto']:.2f}"],
+        ['Total', f"${factura['total']:.2f}"],
+    ]
+    resumen_table = Table(resumen, colWidths=[145 * mm, 35 * mm], hAlign='RIGHT')
+    resumen_table.setStyle(TableStyle([
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('LINEABOVE', (0, -1), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('PADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(resumen_table)
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'factura-{id_factura}.pdf'
+    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000, debug=True)
