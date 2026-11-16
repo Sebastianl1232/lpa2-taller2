@@ -9,23 +9,79 @@
 <body>
     <div class="container">
         <h1>Generador de Facturas PDF</h1>
-        <form method="POST" action="/generar-pdf">
+        <form method="POST" action="/factura">
             <div class="form-group">
                 <label for="id_factura">ID de Factura:</label>
                 <input type="text" id="id_factura" name="id_factura" required>
             </div>
-            <button type="submit">Generar PDF</button>
+            <button type="submit">Consultar factura</button>
         </form>
-        
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <div class="alert">
-                    {% for message in messages %}
-                        <p>{{ message }}</p>
-                    {% endfor %}
+
+        {% if error %}
+            <div class="alert">{{ error }}</div>
+        {% endif %}
+
+        {% if factura %}
+            <section class="invoice-preview">
+                <div class="invoice-heading">
+                    <div>
+                        <h2>Factura {{ factura.numero_factura }}</h2>
+                        <p>Fecha de emisión: {{ factura.fecha_emision }}</p>
+                    </div>
+                    <span class="status">Vista previa</span>
                 </div>
-            {% endif %}
-        {% endwith %}
+
+                <div class="parties">
+                    <div>
+                        <h3>Empresa</h3>
+                        <p>{{ factura.empresa.nombre }}</p>
+                        <p>{{ factura.empresa.direccion }}</p>
+                        <p>{{ factura.empresa.telefono }}</p>
+                        <p>{{ factura.empresa.email }}</p>
+                    </div>
+                    <div>
+                        <h3>Cliente</h3>
+                        <p>{{ factura.cliente.nombre }}</p>
+                        <p>{{ factura.cliente.direccion }}</p>
+                        <p>{{ factura.cliente.telefono }}</p>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Cantidad</th>
+                                <th>Descripción</th>
+                                <th>Precio unitario</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in factura.detalle %}
+                                <tr>
+                                    <td>{{ item.cantidad }}</td>
+                                    <td>{{ item.descripcion }}</td>
+                                    <td>${{ "%.2f"|format(item.precio_unitario) }}</td>
+                                    <td>${{ "%.2f"|format(item.total) }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="totals">
+                    <p>Subtotal: <strong>${{ "%.2f"|format(factura.subtotal) }}</strong></p>
+                    <p>Impuesto (21%): <strong>${{ "%.2f"|format(factura.impuesto) }}</strong></p>
+                    <p class="grand-total">Total: <strong>${{ "%.2f"|format(factura.total) }}</strong></p>
+                </div>
+
+                <form method="POST" action="/generar-pdf">
+                    <input type="hidden" name="id_factura" value="{{ factura.numero_factura }}">
+                    <button type="submit">Descargar PDF</button>
+                </form>
+            </section>
+        {% endif %}
     </div>
 </body>
 </html>
