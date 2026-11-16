@@ -63,6 +63,23 @@ class FrontendTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     @patch.object(frontend_main.requests, "get")
+    def test_invoice_request_renders_preview(self, mock_get):
+        mock_get.return_value = SimpleNamespace(
+            status_code=200,
+            json=lambda: self.invoice,
+        )
+
+        response = self.client.post(
+            "/factura",
+            data={"id_factura": "TEST-001"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Factura TEST-001", response.data)
+        self.assertIn(b"Vista previa", response.data)
+        self.assertIn(b"Descargar PDF", response.data)
+
+    @patch.object(frontend_main.requests, "get")
     def test_invoice_request_returns_pdf(self, mock_get):
         mock_get.return_value = SimpleNamespace(
             status_code=200,
